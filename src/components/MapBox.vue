@@ -1,28 +1,36 @@
 <template>
   <div class="container">
+    <div id="mapTypeBtn" @click="changeMapType">{{ isSatellite ? '关闭卫星图层' : '🛰️卫星图层' }}</div>
     <div id="mapBox"></div>
-    <div class="pointList">
-      <button @click="onExport">导出</button>
-      <button @click="onRevocation" :disabled="list.length === 0">撤销</button>
-      <p>共计{{ list.length }}条</p>
-      <p v-for="(item, index) in list" :key="index">{{ item.join(',') }}</p>
-    </div>
+    <RecordBox ref="recordBox" :pointList="list" @updatedList="updatedList" />
   </div>
 </template>
 
 <script>
+import RecordBox from './RecordBox.vue'
 export default {
   name: 'map-box',
   props: {
     msg: String
   },
+  components: { RecordBox },
   data() {
     return {
       map: null,
+      mapType: 'BMAP_NORMAL_MAP',
       list: []
     }
   },
+  computed: {
+    isSatellite() {
+      return this.mapType === 'BMAP_SATELLITE_MAP'
+    },
+  },
   mounted() {
+    const list = localStorage.getItem('list')
+    if (list) {
+      this.list = JSON.parse(list)
+    }
     this.init()
   },
   methods: {
@@ -35,38 +43,37 @@ export default {
       map.enableScrollWheelZoom(true);
       map.addControl(cityCtrl);
       map.addEventListener('click', (e) => {
-        const point = [Number(e.latlng.lng.toFixed(6)), Number(e.latlng.lat.toFixed(6))]
-        this.list.push(point)
-        this.createLine()
+        if (this.$refs.recordBox.detailVisible) {
+          const point = [Number(e.latlng.lng.toFixed(6)), Number(e.latlng.lat.toFixed(6))]
+          this.list[this.$refs.recordBox.currentIndex].points.push(point)
+          this.createOverlay()
+        }
       });
       this.map = map
+      this.createOverlay()
     },
-    createLine() {
+    createOverlay() {
       this.map.clearOverlays()
       const BMapGL = window.BMapGL
-      const points = this.list.map(item => {
-        return new BMapGL.Point(item[0], item[1])
+      if (!this.list.length) return
+      this.list.forEach(item => {
+        if (item.points.length === 0) return
+        const points = item.points.map(it => {
+          return new BMapGL.Point(it[0], it[1])
+        })
+        const polyline = item.type === 'line' ? new BMapGL.Polyline(points, { strokeColor: "red", strokeWeight: 10, strokeOpacity: 0.5 }) : new BMapGL.Polygon(points, { strokeColor: "blue", strokeWeight: 2, strokeOpacity: 0.5 });
+        this.map.addOverlay(polyline);
       })
-      const polyline = new BMapGL.Polyline(points, { strokeColor: "red", strokeWeight: 10, strokeOpacity: 0.5 });
-      this.map.addOverlay(polyline);
     },
-    onExport() {
-      const text = JSON.stringify(this.list)
-      this.$copyText(text).then(
-        e => {
-          alert('导出成功，已复制至剪贴板')
-          console.log('复制成功：', e);
-        },
-        e => {
-          alert('导出失败')
-          console.log('复制失败：', e);
-        }
-      )
+    changeMapType() {
+      // eslint-disable-next-line no-undef
+      this.map.setMapType(this.isSatellite ? BMAP_NORMAL_MAP : BMAP_SATELLITE_MAP)
+      this.mapType = this.isSatellite ? 'BMAP_NORMAL_MAP' : 'BMAP_SATELLITE_MAP'
     },
-    onRevocation() {
-      const index = this.list.length - 1
-      this.list.splice(index, 1)
-      this.createLine()
+    updatedList(list) {
+      this.list = list
+      window.localStorage.setItem('list', JSON.stringify(this.list))
+      this.createOverlay()
     }
   }
 }
@@ -78,18 +85,25 @@ export default {
   height: 100vh;
 }
 
-.pointList {
+#mapTypeBtn {
   position: absolute;
-  z-index: 999;
-  right: 10px;
-  bottom: 20px;
-  width: 200px;
-  height: 200px;
-  overflow: auto;
-  background-color: #ffffff93;
+  top: 11px;
+  left: 150px;
+  z-index: 10;
+  width: 100px;
+  height: 31px;
+  line-height: 31px;
+  border-radius: 3px;
+  background-color: #fff;
+  padding: 0 12px 0 10px;
+  color: #666;
+  box-shadow: 1px 2px 1px rgba(0, 0, 0, .15);
+  user-select: none;
+  cursor: pointer;
 }
 
-button {
-  margin: 0 5px;
+#mapTypeBtn:hover {
+  background-color: #dadada;
+  color: #3d6dcc;
 }
 </style>

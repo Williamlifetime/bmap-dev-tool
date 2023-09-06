@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <MapBox msg="Welcome to Your Vue.js App"/>
+    <MapBox />
   </div>
 </template>
 
